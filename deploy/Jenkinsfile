@@ -1,0 +1,24 @@
+node('jenkins-slave') {
+    stage('Git Clone'){
+        checkout([$class: 'GitSCM', branches: [[name: '${git}']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: 'gitlab_root_id', url:'http://192.168.100.3/root/my-demo4.git']]])
+        //git credentialsId: '92ae8184-9661-425d-8609-3c994ddecb21', url: 'http://192.168.100.3/root/my-demo3.git'
+    }
+    stage('Maven Build'){
+        sh '''
+        /usr/local/maven/bin/mvn clean package -Dmaven.test.skip=true -f $WORKSPACE
+        echo FROM 192.168.100.2/ops/tomcat:v1 >$WORKSPACE/target/Dockerfile
+        echo RUN rm -rf /usr/local/tomcat/webapps/* >>$WORKSPACE/target/Dockerfile
+        echo COPY hello-world-war-1.0.0 /usr/local/tomcat/webapps/ROOT >>$WORKSPACE/target/Dockerfile
+        '''
+    }
+    stage("Docker Build Stage"){
+        sh '''
+        docker build -t 192.168.100.2/ops/tomcat:latest -f ${WORKSPACE}/target/Dockerfile .
+        docker login --username=admin 192.168.100.2 --password "xxzx@789"
+        docker push 192.168.100.2/ops/tomcat:latest
+        '''
+    }
+    stage("Deploy"){
+        sh'kubectl set image deployment/my-tomcat -n jenkins-cicd my-tomcat=192.168.100.2/ops/tomcat:latest'
+    }
+}
